@@ -35,7 +35,11 @@ If bundler is not being used to manage dependencies, install the gem by executin
 
 ## Usage
 
-Install the Gem and proceed normally with Rails. It should be transparent to developers.
+Install the Gem and proceed normally with Rails. It should be mostly transparent to developers outside of the issues listed below.
+
+1. Avoid using Bulk insert / update / delete. This is handled for you.
+2. Until just before the Commit, Writes are sent to the local Cache while Reads are drawn from the database. If you must read from tables to which you have written and may be selecting records you have edited during this transaction, use Nested SQL rather than Joins to get related records if you have created new records or modified any relevant foreign keys.
+3. For now, HABTM relations are not included in this. Those would be written directly to the primary database normally, and may encounter Foreign Key Constraint errors if written before their related records are created there. This is the next issue to be addressed in this Gem. In the meantime, it may be better to build models for joins-tables and use paired `has_many ... :through ...` relations.
 
 ## Development
 
