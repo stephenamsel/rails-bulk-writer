@@ -6,6 +6,7 @@ module RailsBulkWriter
             around_save :save_to_cache
             around_destroy :mark_to_destroy
             before_commit :send_cache_to_db
+            before_commit :delete_marked
 
             def load
                 from_primary = super
@@ -23,6 +24,8 @@ module RailsBulkWriter
                 from_primary.select(|m| m[self.primary_key]).each do |model|
                     model.attributes = model.attributes.merge(from_cache[model[self.primary_key]].attributes)
                 end
+                # TODO: Make this work with relations if possible. Otherwise, add a warning to use only Nested SQL
+                # when write-reads are a concern
             end
 
             def save_to_cache
@@ -31,7 +34,20 @@ module RailsBulkWriter
             end
 
             def send_cache_to_db
-                
+                AbstractCache.connect_to_thread_db do
+                    cached_records = cache_class.all
+                    self.class.bulk_import cached_records, on_duplicate_key_update: [self.class.primary_key.to_sym]
+                    cache_class.delete_all # uses SQLite Truncate optimizer
+                end
+            end
+
+            def mark_to_destroy
+                DeleteMarker.to_delete[self.class.name] ||= []
+                DeleteMarker.to_delete[self.class.name].push(self.id)
+            end
+
+            def delete_marked
+                self.class.where(id: DeleteMarker.to_delete[self.class.name]).delete_all
             end
 
             def cache_class
