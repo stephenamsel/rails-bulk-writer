@@ -1,6 +1,6 @@
 # Pre-Alpha
 
-This is still under construction. It does not yet initialize nor identify the necessary SQLite DBs.
+This is still under construction. IT does not yet have proper testing.
 
 It will be published if and when the author has been able to test it and has time to manage a collaboration.
 
