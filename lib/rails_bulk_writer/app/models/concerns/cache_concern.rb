@@ -3,18 +3,29 @@ module RailsBulkWriter
         extends ActiveSupport::CacheConcern
 
         included do
-            around_save :save_to_cache
+            around_save :save_to_cache, unless: { CacheConcern.changing_keys(self) }
             around_destroy :mark_to_destroy
             before_commit :send_cache_to_db
             before_commit :delete_marked
+            before_update :mark_update, if: { CacheConcern.changing_keys(self) }
+
+            FOREIGN_KEY_FIELDS = reflections.
+                select{ |n, r| r.macro == :belongs_to }.
+                map{ |name, reflection| reflection.foreign_key.to_sym }
+
 
             def load
                 from_primary = super
                 from_cache = nil
+                use_primary = (DeleteMarker.to_delete[self.class.name] || []) | 
+                    (UpdateKeyMarker.updated[self.class.name] || [])
+
                 AbstractCache.connected_to(role: writing, database: AbstractCache.thread_shard) do
-                    from_cache = AbstractCache.execute(self.to_sql).group_by{ |m| m[self.primary_key.to_sym] }
+                    from_cache = AbstractCache.execute(self.to_sql)
+                        .where.not(id: use_primary)
+                        .group_by{ |m| m[self.primary_key.to_sym] }
                 end
-                    
+                
                 from_cache.each do |key, value|
                     # they should be 1-element arrays
                     from_cache[key] = value.first 
@@ -46,6 +57,11 @@ module RailsBulkWriter
                 DeleteMarker.to_delete[self.class.name].push(self.id)
             end
 
+            def mark_update
+                UpdateKeyMarker.updated[self.class.name] ||= []
+                UpdateKeyMarker.updated[self.class.name].push(self.id)
+            end
+
             def delete_marked
                 self.class.where(id: DeleteMarker.to_delete[self.class.name]).delete_all
             end
@@ -54,6 +70,17 @@ module RailsBulkWriter
                 "#{RailsBulkWriter.CACHE_NAMESPACE}::#{self.name}".constantize
             end
         end
+
+        def changing_keys(obj)
+            return true unless obj.class::FOREIGN_KEY_FIELDS.defined?
+
+            (
+                obj.changes.keys.map{ |attr| attr.to_sym } &
+                obj.class::FOREIGN_KEY_FIELDS
+            ).present?
+        end
+
+        module_function :changing_keys
 
     end
 end
