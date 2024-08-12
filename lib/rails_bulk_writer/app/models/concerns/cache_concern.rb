@@ -3,7 +3,8 @@ module RailsBulkWriter
         extends ActiveSupport::CacheConcern
 
         included do
-            around_save :save_to_cache, unless: { CacheConcern.changing_keys(self) }
+            around_create :save_to_cache
+            around_update :save_to_cache, unless: { CacheConcern.changing_keys(self) }
             around_destroy :mark_to_destroy
             before_commit :send_cache_to_db
             before_commit :delete_marked
