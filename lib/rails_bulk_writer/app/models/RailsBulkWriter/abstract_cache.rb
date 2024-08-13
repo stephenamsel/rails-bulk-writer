@@ -15,9 +15,11 @@ class RailsBulkWriter::AbstractCache < ActiveRecord::Base
     end
 
     def dump_data
+        out = nil
         connect_to_thread_db do
-            records = self.all.map{|records| records.attributes.except(self.primary_key)}
+            out = self.all.map{|records| records.attributes.except(self.primary_key)}
             self.delete_all # uses Truncate optimizer for SQLite
         end
+        out
     end
 end

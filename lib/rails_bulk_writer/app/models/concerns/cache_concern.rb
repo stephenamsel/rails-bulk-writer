@@ -22,9 +22,9 @@ module RailsBulkWriter
                     (UpdateKeyMarker.updated[self.class.name] || [])
 
                 AbstractCache.connected_to(role: writing, database: AbstractCache.thread_shard) do
-                    from_cache = AbstractCache.execute(self.to_sql)
+                    from_cache = AbstractCache.execute(self
                         .where.not(id: use_primary)
-                        .group_by{ |m| m[self.primary_key.to_sym] }
+                        .group_by{ |m| m[self.primary_key.to_sym] }.to_sql)
                 end
                 
                 from_cache.each do |key, value|
@@ -36,8 +36,6 @@ module RailsBulkWriter
                 from_primary.select(|m| m[self.primary_key]).each do |model|
                     model.attributes = model.attributes.merge(from_cache[model[self.primary_key]].attributes)
                 end
-                # TODO: Make this work with relations if possible. Otherwise, add a warning to use only Nested SQL
-                # when write-reads are a concern
             end
 
             def save_to_cache
